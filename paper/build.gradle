@@ -43,3 +43,4 @@ tasks {
 
 build.dependsOn(shadowJar)
 runServer.dependsOn(build)
+tasks.compileJava.dependsOn(':common:shadowJar')

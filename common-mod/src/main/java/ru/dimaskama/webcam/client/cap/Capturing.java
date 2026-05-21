@@ -40,10 +40,11 @@ public class Capturing {
     private static IntList listDevices() {
         int max = WebcamModClient.CONFIG.getData().maxDevices();
         IntList list = new IntArrayList();
+        int apiPreference = org.opencv.videoio.Videoio.CAP_ANY;
         for (int i = 0; i < max; i++) {
             VideoCapture capture = null;
             try {
-                capture = new VideoCapture(i);
+                capture = new VideoCapture(i, apiPreference);
                 if (capture.isOpened()) {
                     list.add(i);
                 }
