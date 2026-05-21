@@ -58,6 +58,9 @@ public class CapturingDevice extends Thread {
         int lastFps = 0;
         int realFps = 0;
 
+        int emptyFramesCount = 0;
+        boolean workaroundApplied = false;
+
         VideoCapture cap = new VideoCapture(deviceNumber);
         Mat mat = new Mat();
         try {
@@ -68,6 +71,8 @@ public class CapturingDevice extends Thread {
                 Resolution resolution = this.resolution;
                 if (lastResolution != resolution) {
                     lastResolution = resolution;
+                    emptyFramesCount = 0;
+                    workaroundApplied = false;
                     cap.set(CAP_PROP_FRAME_WIDTH, resolution.width);
                     cap.set(CAP_PROP_FRAME_HEIGHT, resolution.height);
                     realWidth = (int) Math.round(cap.get(CAP_PROP_FRAME_WIDTH));
@@ -82,6 +87,24 @@ public class CapturingDevice extends Thread {
                 if (!cap.read(mat)) {
                     throw new DeviceException(Component.translatable("webcam.error.device_disconnected", deviceNumber));
                 }
+
+                // Windows DirectShow bug workaround for OBSBOT / OBS Virtual Camera
+                // These cameras default to NV12 format. OpenCV sometimes fails to build the conversion graph
+                // during initialization, resulting in completely black frames (sum == 0).
+                if (!workaroundApplied && mat.channels() == 3) {
+                    if (org.opencv.core.Core.sumElems(mat).val[0] == 0) {
+                        emptyFramesCount++;
+                        // If we see 5 consecutive black frames after resolution change, apply the workaround
+                        if (emptyFramesCount == 5) {
+                            ru.dimaskama.webcam.Webcam.getLogger().warn("Camera device {} is returning black frames. Applying DirectShow NV12 graph rebuild workaround...", deviceNumber);
+                            cap.set(CAP_PROP_FOURCC, org.opencv.videoio.VideoWriter.fourcc('N', 'V', '1', '2'));
+                            workaroundApplied = true;
+                        }
+                    } else {
+                        workaroundApplied = true; // Frame is fine, don't keep checking
+                    }
+                }
+
                 onFrame(realFps, realWidth, realHeight, mat);
             }
         } finally {
